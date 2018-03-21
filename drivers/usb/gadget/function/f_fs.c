@@ -1213,19 +1213,17 @@ static long ffs_epfile_ioctl(struct file *file, unsigned code,
 		case FUNCTIONFS_ENDPOINT_ALLOC:
 			kfree(epfile->buffer);
 			epfile->buffer = NULL;
-			epfile->buf_len = 0;
 			if (value > ENDPOINT_ALLOC_MAX) {
 				ret = -EINVAL;
 				break;
-			} else if (value) {
-				epfile->buffer = kzalloc(value,	GFP_KERNEL);
-				if (!epfile->buffer) {
-					ret = -ENOMEM;
-					break;
-				}
 			}
 			epfile->buf_len = value;
-			ret = 0;
+			if (epfile->buf_len) {
+				epfile->buffer = kzalloc(epfile->buf_len,
+						GFP_KERNEL);
+				if (!epfile->buffer)
+					ret = -ENOMEM;
+			}
 			break;
 
 		default:
