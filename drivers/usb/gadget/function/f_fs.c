@@ -1156,9 +1156,6 @@ ffs_epfile_release(struct inode *inode, struct file *file)
 	atomic_set(&epfile->error, 1);
 	ffs_data_closed(epfile->ffs);
 	file->private_data = NULL;
-	epfile->buf_len = 0;
-	kfree(epfile->buffer);
-	epfile->buffer = NULL;
 
 	return 0;
 }
@@ -1214,28 +1211,23 @@ static long ffs_epfile_ioctl(struct file *file, unsigned code,
 			return ret;
 		}
 		case FUNCTIONFS_ENDPOINT_ALLOC:
-		{
-			void *temp = epfile->buffer;
+			kfree(epfile->buffer);
 			epfile->buffer = NULL;
 			epfile->buf_len = 0;
-			spin_unlock_irq(&epfile->ffs->eps_lock);
-
-			kfree(temp);
-			if (!value)
-				return 0;
-			if (value > ENDPOINT_ALLOC_MAX)
-				return -EINVAL;
-
-			temp = kzalloc(value, GFP_KERNEL);
-			if (!temp)
-				return -ENOMEM;
-
-			spin_lock_irq(&epfile->ffs->eps_lock);
-			epfile->buffer = temp;
+			if (value > ENDPOINT_ALLOC_MAX) {
+				ret = -EINVAL;
+				break;
+			} else if (value) {
+				epfile->buffer = kzalloc(value,	GFP_KERNEL);
+				if (!epfile->buffer) {
+					ret = -ENOMEM;
+					break;
+				}
+			}
 			epfile->buf_len = value;
 			ret = 0;
 			break;
-		}
+
 		default:
 			ret = -ENOTTY;
 		}
@@ -1785,6 +1777,7 @@ static void ffs_epfiles_destroy(struct ffs_epfile *epfiles, unsigned count)
 			dput(epfile->dentry);
 			epfile->dentry = NULL;
 		}
+        kfree(epfile->buffer);
 	}
 
 	kfree(epfiles);
